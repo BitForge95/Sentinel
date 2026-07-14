@@ -9,6 +9,7 @@ const generateMockTransaction = async (req,res) => {
             amount : db_data.amount,
             currency : db_data.currency,
         });
+        //Insetad of just sending the new Transaction(req.body) I have whitelisted the necessary entries
 
         await dummy.save();
 
@@ -18,4 +19,14 @@ const generateMockTransaction = async (req,res) => {
     }
 }
 
-module.exports = {generateMockTransaction};
+const getAllTransactions = async (req,res) => {
+    try {
+        const transactions = await Transaction.find().sort({createdAt : -1});
+
+        res.status(201).json(transactions);
+    } catch (error) {
+        res.status(500).json({error : error.message});
+    }
+}
+
+module.exports = {generateMockTransaction,getAllTransactions};

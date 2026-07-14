@@ -4,6 +4,7 @@ const app = express();
 var cors = require('cors');
 const connectDB = require('./config/db');
 const transactionRoutes = require('./routes/transactionRoute.js');
+const fraudRoute = require('./routes/fraudRoute.js');
 
 app.use(cors());
 app.use(express.json());
@@ -16,6 +17,7 @@ app.get('/',(req,res) => {
 });
 
 app.use('/api/transactions', transactionRoutes);
+app.use('/api/fraud',fraudRoute);
 
 app.listen(process.env.PORT,() => {
     console.log(`Listening to port ${process.env.PORT}`);
