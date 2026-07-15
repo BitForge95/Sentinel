@@ -1,15 +1,16 @@
+import React from 'react';
 import Navbar from './components/Navbar';
-import Footer from './components/Footer';
+import Dashboard from './pages/Dashboard';
 
-function App() {
-  return (
-    <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900">
-      <Navbar />
-      <main className="flex-1 p-8">
-      </main>
-      <Footer />
-    </div>
-  );
-}
+const App = () => {
+    return (
+        <div className="min-h-screen bg-gray-50 text-gray-900 font-sans selection:bg-gray-200">
+            <Navbar />
+            <main className="max-w-6xl mx-auto px-6 py-8">
+                <Dashboard />
+            </main>
+        </div>
+    );
+};
 
 export default App;
