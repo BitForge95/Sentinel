@@ -6,11 +6,16 @@ const Dashboard = () => {
     const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(true);
     
-    // new state for search and filtering
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
+    
+    // new state to track if live polling is active
+    const [isLive, setIsLive] = useState(false);
 
-    const fetchDashboardData = async () => {
+    // added a silent parameter to prevent UI flickering during background updates
+    const fetchDashboardData = async (silent = false) => {
+        if (!silent) setLoading(true);
+        
         try {
             const [statsRes, logsRes, txRes] = await Promise.all([
                 fetch('http://localhost:5000/api/analytics'),
@@ -25,16 +30,28 @@ const Dashboard = () => {
             setStats(statsData);
             setFraudLogs(logsData);
             setTransactions(txData);
-            setLoading(false);
+            if (!silent) setLoading(false);
         } catch (error) {
             console.error("failed to fetch dashboard data:", error);
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     };
 
+    // effect block now handles the background polling interval based on isLive state
     useEffect(() => {
         fetchDashboardData();
-    }, []);
+
+        let pollInterval;
+        if (isLive) {
+            pollInterval = setInterval(() => {
+                fetchDashboardData(true);
+            }, 3000);
+        }
+
+        return () => {
+            if (pollInterval) clearInterval(pollInterval);
+        };
+    }, [isLive]);
 
     const handleFlagTransaction = async (id, overrideReason = null) => {
         const reason = overrideReason || window.prompt("Enter reason for flagging this transaction:");
@@ -51,7 +68,7 @@ const Dashboard = () => {
                 })
             });
 
-            if (response.ok) fetchDashboardData();
+            if (response.ok) fetchDashboardData(true);
         } catch (error) {
             console.error("failed to flag transaction:", error);
         }
@@ -63,7 +80,7 @@ const Dashboard = () => {
                 method: 'DELETE'
             });
 
-            if (response.ok) fetchDashboardData();
+            if (response.ok) fetchDashboardData(true);
         } catch (error) {
             console.error("failed to resolve incident:", error);
         }
@@ -94,7 +111,7 @@ const Dashboard = () => {
             if (isAnomaly && newTx._id) {
                 await handleFlagTransaction(newTx._id, "System Alert: Suspicious high volume transfer");
             } else {
-                fetchDashboardData();
+                fetchDashboardData(true);
             }
         } catch (error) {
             console.error("network connection failed:", error);
@@ -109,7 +126,6 @@ const Dashboard = () => {
         ? ((stats.flaggedTransactions / stats.totalTransactions) * 100).toFixed(2) 
         : 0;
 
-    // filter logic applied before rendering the table
     const filteredTransactions = transactions.filter(tx => {
         const matchesSearch = tx.senderAccount.includes(searchTerm) || tx.receiverAccount.includes(searchTerm);
         const matchesStatus = statusFilter === 'all' || tx.status === statusFilter;
@@ -119,7 +135,23 @@ const Dashboard = () => {
     return (
         <div className="space-y-8">
             <div className="flex justify-between items-center bg-white border border-gray-200 px-4 py-3 shadow-sm">
-                <span className="text-sm font-medium text-gray-700">Network Simulation Controls</span>
+                <div className="flex items-center gap-4">
+                    <span className="text-sm font-medium text-gray-700">Network Simulation Controls</span>
+                    
+                    {/* toggle button for live monitoring */}
+                    <button 
+                        onClick={() => setIsLive(!isLive)}
+                        className={`flex items-center gap-2 text-xs px-3 py-1.5 border transition-colors ${
+                            isLive 
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700' 
+                            : 'bg-gray-50 border-gray-200 text-gray-500'
+                        }`}
+                    >
+                        <div className={`w-1.5 h-1.5 rounded-full ${isLive ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`}></div>
+                        {isLive ? 'Live Monitoring Active' : 'Enable Live Feed'}
+                    </button>
+                </div>
+                
                 <div className="flex gap-3">
                     <button 
                         onClick={() => injectPayload(false)}
@@ -215,7 +247,6 @@ const Dashboard = () => {
                 <div className="px-4 py-3 border-b border-gray-200 bg-gray-50/50 flex justify-between items-center">
                     <h2 className="text-sm font-medium text-gray-700">Raw Transaction Feed</h2>
                     
-                    {/* new search and filter controls */}
                     <div className="flex gap-3">
                         <input 
                             type="text"
@@ -255,13 +286,11 @@ const Dashboard = () => {
                                         {new Date(tx.createdAt).toLocaleString()}
                                     </td>
                                     <td className="px-4 py-3 text-gray-800 font-mono text-xs">
-                                        {/* highlight matches in sender column if searching */}
                                         {searchTerm && tx.senderAccount.includes(searchTerm) ? (
                                             <span className="bg-yellow-100">{tx.senderAccount}</span>
                                         ) : tx.senderAccount}
                                     </td>
                                     <td className="px-4 py-3 text-gray-800 font-mono text-xs">
-                                        {/* highlight matches in receiver column if searching */}
                                         {searchTerm && tx.receiverAccount.includes(searchTerm) ? (
                                             <span className="bg-yellow-100">{tx.receiverAccount}</span>
                                         ) : tx.receiverAccount}
