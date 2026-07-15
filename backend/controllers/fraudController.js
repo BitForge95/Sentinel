@@ -33,4 +33,26 @@ const getFraudLogs = async (req,res) => {
     }
 }
 
-module.exports = {flagTransaction,getFraudLogs};
+const resolveIncident = async (req, res) => {
+    try {
+        const logId = req.params.id;
+        
+        // fetch the log to get the associated transaction ID
+        const log = await FraudLog.findById(logId);
+        if (!log) {
+            return res.status(404).json({ error: 'incident not found' });
+        }
+
+        // update the transaction status so it is no longer pending or flagged
+        await Transaction.findByIdAndUpdate(log.transactionId, { status: 'resolved' });
+
+        // remove the log from the active threats table
+        await FraudLog.findByIdAndDelete(logId);
+
+        res.status(200).json({ message: 'incident resolved successfully' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+module.exports = { flagTransaction, getFraudLogs, resolveIncident };

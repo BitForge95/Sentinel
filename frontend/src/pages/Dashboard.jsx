@@ -8,7 +8,6 @@ const Dashboard = () => {
 
     const fetchDashboardData = async () => {
         try {
-            // fetch all data endpoints at once
             const [statsRes, logsRes, txRes] = await Promise.all([
                 fetch('http://localhost:5000/api/analytics'),
                 fetch('http://localhost:5000/api/fraud'),
@@ -33,30 +32,72 @@ const Dashboard = () => {
         fetchDashboardData();
     }, []);
 
-    const handleFlagTransaction = async (id) => {
-        // use a simple browser prompt for the internal tool
-        const reason = window.prompt("Enter reason for flagging this transaction:");
+    const handleFlagTransaction = async (id, overrideReason = null) => {
+        const reason = overrideReason || window.prompt("Enter reason for flagging this transaction:");
         
         if (!reason) return;
 
         try {
             const response = await fetch(`http://localhost:5000/api/fraud/${id}`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     reason: reason,
-                    severity: 'medium'
+                    severity: overrideReason ? 'high' : 'medium'
                 })
             });
 
+            if (response.ok) fetchDashboardData();
+        } catch (error) {
+            console.error("failed to flag transaction:", error);
+        }
+    };
+
+    // new function to hit our backend resolve endpoint
+    const handleResolveIncident = async (logId) => {
+        try {
+            const response = await fetch(`http://localhost:5000/api/fraud/${logId}/resolve`, {
+                method: 'DELETE'
+            });
+
             if (response.ok) {
-                // refresh the dashboard data after a successful flag
+                // refresh the tables to show the updated state
                 fetchDashboardData();
             }
         } catch (error) {
-            console.error("failed to flag transaction:", error);
+            console.error("failed to resolve incident:", error);
+        }
+    };
+
+    const injectPayload = async (isAnomaly) => {
+        const payload = {
+            senderAccount: Math.floor(100000 + Math.random() * 900000).toString(),
+            receiverAccount: Math.floor(100000 + Math.random() * 900000).toString(),
+            amount: isAnomaly ? Math.floor(50000 + Math.random() * 50000) : Math.floor(10 + Math.random() * 900),
+            currency: 'USD'
+        };
+
+        try {
+            const response = await fetch('http://localhost:5000/api/transactions/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const newTx = await response.json();
+
+            if (!response.ok) {
+                console.error("backend validation failed:", newTx);
+                return; 
+            }
+
+            if (isAnomaly && newTx._id) {
+                await handleFlagTransaction(newTx._id, "System Alert: Suspicious high volume transfer");
+            } else {
+                fetchDashboardData();
+            }
+        } catch (error) {
+            console.error("network connection failed:", error);
         }
     };
 
@@ -70,6 +111,24 @@ const Dashboard = () => {
 
     return (
         <div className="space-y-8">
+            <div className="flex justify-between items-center bg-white border border-gray-200 px-4 py-3 shadow-sm">
+                <span className="text-sm font-medium text-gray-700">Network Simulation Controls</span>
+                <div className="flex gap-3">
+                    <button 
+                        onClick={() => injectPayload(false)}
+                        className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 border border-gray-300 transition-colors"
+                    >
+                        Inject Standard Payload
+                    </button>
+                    <button 
+                        onClick={() => injectPayload(true)}
+                        className="text-xs bg-red-50 hover:bg-red-100 text-red-700 px-3 py-1.5 border border-red-200 transition-colors"
+                    >
+                        Inject Anomaly Pattern
+                    </button>
+                </div>
+            </div>
+
             <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4">
                 <div className="flex flex-col">
                     <span className="text-gray-500 text-xs uppercase tracking-wider mb-1">Scanned Transactions</span>
@@ -101,6 +160,7 @@ const Dashboard = () => {
                                 <th className="px-4 py-2 font-normal text-xs">Risk Level</th>
                                 <th className="px-4 py-2 font-normal text-xs">Anomaly Details</th>
                                 <th className="px-4 py-2 font-normal text-xs">Transaction Value</th>
+                                <th className="px-4 py-2 font-normal text-xs text-right">Action</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
@@ -122,11 +182,19 @@ const Dashboard = () => {
                                     <td className="px-4 py-3 text-gray-500 font-mono text-xs">
                                         {log.transactionId?.amount || '0'} {log.transactionId?.currency || ''}
                                     </td>
+                                    <td className="px-4 py-3 text-right">
+                                        <button 
+                                            onClick={() => handleResolveIncident(log._id)}
+                                            className="text-xs text-emerald-600 hover:text-emerald-800 font-medium border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-sm transition-colors"
+                                        >
+                                            Resolve
+                                        </button>
+                                    </td>
                                 </tr>
                             ))}
                             {fraudLogs.length === 0 && (
                                 <tr>
-                                    <td colSpan="4" className="px-4 py-8 text-center text-gray-400 text-sm">
+                                    <td colSpan="5" className="px-4 py-8 text-center text-gray-400 text-sm">
                                         no anomalies detected in current batch.
                                     </td>
                                 </tr>
@@ -149,7 +217,7 @@ const Dashboard = () => {
                                 <th className="px-4 py-2 font-normal text-xs">Receiver</th>
                                 <th className="px-4 py-2 font-normal text-xs">Amount</th>
                                 <th className="px-4 py-2 font-normal text-xs">Status</th>
-                                <th className="px-4 py-2 font-normal text-xs">Action</th>
+                                <th className="px-4 py-2 font-normal text-xs text-right">Action</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
@@ -164,11 +232,14 @@ const Dashboard = () => {
                                         {tx.amount} {tx.currency}
                                     </td>
                                     <td className="px-4 py-3">
-                                        <span className={`text-xs ${tx.status === 'flagged' ? 'text-red-600' : 'text-gray-500'}`}>
+                                        <span className={`text-xs ${
+                                            tx.status === 'flagged' ? 'text-red-600' : 
+                                            tx.status === 'resolved' ? 'text-emerald-600' : 'text-gray-500'
+                                        }`}>
                                             {tx.status}
                                         </span>
                                     </td>
-                                    <td className="px-4 py-3">
+                                    <td className="px-4 py-3 text-right">
                                         {tx.status === 'pending' && (
                                             <button 
                                                 onClick={() => handleFlagTransaction(tx._id)}
