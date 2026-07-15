@@ -5,6 +5,10 @@ const Dashboard = () => {
     const [fraudLogs, setFraudLogs] = useState([]);
     const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(true);
+    
+    // new state for search and filtering
+    const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
 
     const fetchDashboardData = async () => {
         try {
@@ -53,17 +57,13 @@ const Dashboard = () => {
         }
     };
 
-    // new function to hit our backend resolve endpoint
     const handleResolveIncident = async (logId) => {
         try {
             const response = await fetch(`http://localhost:5000/api/fraud/${logId}/resolve`, {
                 method: 'DELETE'
             });
 
-            if (response.ok) {
-                // refresh the tables to show the updated state
-                fetchDashboardData();
-            }
+            if (response.ok) fetchDashboardData();
         } catch (error) {
             console.error("failed to resolve incident:", error);
         }
@@ -108,6 +108,13 @@ const Dashboard = () => {
     const anomalyRate = stats.totalTransactions > 0 
         ? ((stats.flaggedTransactions / stats.totalTransactions) * 100).toFixed(2) 
         : 0;
+
+    // filter logic applied before rendering the table
+    const filteredTransactions = transactions.filter(tx => {
+        const matchesSearch = tx.senderAccount.includes(searchTerm) || tx.receiverAccount.includes(searchTerm);
+        const matchesStatus = statusFilter === 'all' || tx.status === statusFilter;
+        return matchesSearch && matchesStatus;
+    });
 
     return (
         <div className="space-y-8">
@@ -205,8 +212,29 @@ const Dashboard = () => {
             </div>
 
             <div className="border border-gray-200 bg-white shadow-sm">
-                <div className="px-4 py-3 border-b border-gray-200 bg-gray-50/50">
+                <div className="px-4 py-3 border-b border-gray-200 bg-gray-50/50 flex justify-between items-center">
                     <h2 className="text-sm font-medium text-gray-700">Raw Transaction Feed</h2>
+                    
+                    {/* new search and filter controls */}
+                    <div className="flex gap-3">
+                        <input 
+                            type="text"
+                            placeholder="search account ID"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="text-xs border border-gray-300 px-2 py-1.5 focus:outline-none focus:border-gray-500 w-48"
+                        />
+                        <select 
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value)}
+                            className="text-xs border border-gray-300 px-2 py-1.5 focus:outline-none focus:border-gray-500 bg-white"
+                        >
+                            <option value="all">All Statuses</option>
+                            <option value="pending">Pending</option>
+                            <option value="flagged">Flagged</option>
+                            <option value="resolved">Resolved</option>
+                        </select>
+                    </div>
                 </div>
                 <div className="overflow-x-auto max-h-96 overflow-y-auto">
                     <table className="w-full text-left text-sm">
@@ -221,13 +249,23 @@ const Dashboard = () => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {transactions.map((tx) => (
+                            {filteredTransactions.map((tx) => (
                                 <tr key={tx._id} className="hover:bg-gray-50 transition-colors">
                                     <td className="px-4 py-3 text-gray-500 font-mono text-xs">
                                         {new Date(tx.createdAt).toLocaleString()}
                                     </td>
-                                    <td className="px-4 py-3 text-gray-800 font-mono text-xs">{tx.senderAccount}</td>
-                                    <td className="px-4 py-3 text-gray-800 font-mono text-xs">{tx.receiverAccount}</td>
+                                    <td className="px-4 py-3 text-gray-800 font-mono text-xs">
+                                        {/* highlight matches in sender column if searching */}
+                                        {searchTerm && tx.senderAccount.includes(searchTerm) ? (
+                                            <span className="bg-yellow-100">{tx.senderAccount}</span>
+                                        ) : tx.senderAccount}
+                                    </td>
+                                    <td className="px-4 py-3 text-gray-800 font-mono text-xs">
+                                        {/* highlight matches in receiver column if searching */}
+                                        {searchTerm && tx.receiverAccount.includes(searchTerm) ? (
+                                            <span className="bg-yellow-100">{tx.receiverAccount}</span>
+                                        ) : tx.receiverAccount}
+                                    </td>
                                     <td className="px-4 py-3 text-gray-900 font-medium">
                                         {tx.amount} {tx.currency}
                                     </td>
@@ -251,10 +289,10 @@ const Dashboard = () => {
                                     </td>
                                 </tr>
                             ))}
-                            {transactions.length === 0 && (
+                            {filteredTransactions.length === 0 && (
                                 <tr>
                                     <td colSpan="6" className="px-4 py-8 text-center text-gray-400 text-sm">
-                                        no transactions available.
+                                        no transactions match current filters.
                                     </td>
                                 </tr>
                             )}
