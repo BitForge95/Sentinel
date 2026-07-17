@@ -8,19 +8,20 @@ const Dashboard = () => {
     
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
-    
-    // new state to track if live polling is active
     const [isLive, setIsLive] = useState(false);
 
-    // added a silent parameter to prevent UI flickering during background updates
-    const fetchDashboardData = async (silent = false) => {
+    // tracking pagination state for the transaction feed
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(false);
+
+    const fetchDashboardData = async (silent = false, fetchPage = 1) => {
         if (!silent) setLoading(true);
         
         try {
             const [statsRes, logsRes, txRes] = await Promise.all([
                 fetch('http://localhost:5000/api/analytics'),
                 fetch('http://localhost:5000/api/fraud'),
-                fetch('http://localhost:5000/api/transactions')
+                fetch(`http://localhost:5000/api/transactions?page=${fetchPage}&limit=50`)
             ]);
             
             const statsData = await statsRes.json();
@@ -29,7 +30,15 @@ const Dashboard = () => {
 
             setStats(statsData);
             setFraudLogs(logsData);
-            setTransactions(txData);
+            
+            // overwrite feed on page 1, append data on subsequent pages
+            if (fetchPage === 1) {
+                setTransactions(txData.transactions);
+            } else {
+                setTransactions(prev => [...prev, ...txData.transactions]);
+            }
+            
+            setHasMore(txData.currentPage < txData.totalPages);
             if (!silent) setLoading(false);
         } catch (error) {
             console.error("failed to fetch dashboard data:", error);
@@ -37,14 +46,16 @@ const Dashboard = () => {
         }
     };
 
-    // effect block now handles the background polling interval based on isLive state
     useEffect(() => {
-        fetchDashboardData();
+        // initialize dashboard with fresh data
+        fetchDashboardData(false, 1);
 
         let pollInterval;
         if (isLive) {
             pollInterval = setInterval(() => {
-                fetchDashboardData(true);
+                // polling only updates page 1 to keep the top of the feed current
+                fetchDashboardData(true, 1);
+                setPage(1); 
             }, 3000);
         }
 
@@ -52,6 +63,12 @@ const Dashboard = () => {
             if (pollInterval) clearInterval(pollInterval);
         };
     }, [isLive]);
+
+    const loadMoreTransactions = () => {
+        const nextPage = page + 1;
+        setPage(nextPage);
+        fetchDashboardData(false, nextPage);
+    };
 
     const handleFlagTransaction = async (id, overrideReason = null) => {
         const reason = overrideReason || window.prompt("Enter reason for flagging this transaction:");
@@ -68,7 +85,7 @@ const Dashboard = () => {
                 })
             });
 
-            if (response.ok) fetchDashboardData(true);
+            if (response.ok) fetchDashboardData(true, 1);
         } catch (error) {
             console.error("failed to flag transaction:", error);
         }
@@ -80,7 +97,7 @@ const Dashboard = () => {
                 method: 'DELETE'
             });
 
-            if (response.ok) fetchDashboardData(true);
+            if (response.ok) fetchDashboardData(true, 1);
         } catch (error) {
             console.error("failed to resolve incident:", error);
         }
@@ -111,14 +128,14 @@ const Dashboard = () => {
             if (isAnomaly && newTx._id) {
                 await handleFlagTransaction(newTx._id, "System Alert: Suspicious high volume transfer");
             } else {
-                fetchDashboardData(true);
+                fetchDashboardData(true, 1);
             }
         } catch (error) {
             console.error("network connection failed:", error);
         }
     };
 
-    if (loading) {
+    if (loading && transactions.length === 0) {
         return <div className="text-gray-500 mt-20 text-center text-sm font-mono">loading transaction batch...</div>;
     }
 
@@ -138,7 +155,6 @@ const Dashboard = () => {
                 <div className="flex items-center gap-4">
                     <span className="text-sm font-medium text-gray-700">Network Simulation Controls</span>
                     
-                    {/* toggle button for live monitoring */}
                     <button 
                         onClick={() => setIsLive(!isLive)}
                         className={`flex items-center gap-2 text-xs px-3 py-1.5 border transition-colors ${
@@ -267,9 +283,9 @@ const Dashboard = () => {
                         </select>
                     </div>
                 </div>
-                <div className="overflow-x-auto max-h-96 overflow-y-auto">
+                <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
                     <table className="w-full text-left text-sm">
-                        <thead className="sticky top-0 bg-white">
+                        <thead className="sticky top-0 bg-white z-10">
                             <tr className="border-b border-gray-200 text-gray-500">
                                 <th className="px-4 py-2 font-normal text-xs">Timestamp</th>
                                 <th className="px-4 py-2 font-normal text-xs">Sender</th>
@@ -328,6 +344,17 @@ const Dashboard = () => {
                         </tbody>
                     </table>
                 </div>
+                {/* conditional render for the load more control */}
+                {hasMore && (
+                    <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 text-center">
+                        <button 
+                            onClick={loadMoreTransactions}
+                            className="text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors"
+                        >
+                            Load Older Transactions
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );

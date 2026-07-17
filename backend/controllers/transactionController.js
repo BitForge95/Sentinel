@@ -21,9 +21,21 @@ const generateMockTransaction = async (req,res) => {
 
 const getAllTransactions = async (req,res) => {
     try {
-        const transactions = await Transaction.find().sort({createdAt : -1});
+        // default to page 1 and 50 items per page to prevent memory overload
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 50;
+        const skip = (page - 1) * limit;
 
-        res.status(201).json(transactions);
+
+        const transactions = await Transaction.find().sort({createdAt : -1}).skip(skip).limit(limit);
+
+        const total = await Transaction.countDocuments();
+
+        res.status(200).json({
+            transactions,
+            totalPages: Math.ceil(total / limit),
+            currentPage: page
+        });
     } catch (error) {
         res.status(500).json({error : error.message});
     }
