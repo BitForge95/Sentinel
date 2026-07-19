@@ -10,9 +10,11 @@ const Dashboard = () => {
     const [statusFilter, setStatusFilter] = useState('all');
     const [isLive, setIsLive] = useState(false);
 
-    // tracking pagination state for the transaction feed
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(false);
+    
+    // track which transaction is currently selected for the inspector
+    const [selectedTx, setSelectedTx] = useState(null);
 
     const fetchDashboardData = async (silent = false, fetchPage = 1) => {
         if (!silent) setLoading(true);
@@ -31,7 +33,6 @@ const Dashboard = () => {
             setStats(statsData);
             setFraudLogs(logsData);
             
-            // overwrite feed on page 1, append data on subsequent pages
             if (fetchPage === 1) {
                 setTransactions(txData.transactions);
             } else {
@@ -47,13 +48,11 @@ const Dashboard = () => {
     };
 
     useEffect(() => {
-        // initialize dashboard with fresh data
         fetchDashboardData(false, 1);
 
         let pollInterval;
         if (isLive) {
             pollInterval = setInterval(() => {
-                // polling only updates page 1 to keep the top of the feed current
                 fetchDashboardData(true, 1);
                 setPage(1); 
             }, 3000);
@@ -150,7 +149,7 @@ const Dashboard = () => {
     });
 
     return (
-        <div className="space-y-8">
+        <div className="space-y-8 relative">
             <div className="flex justify-between items-center bg-white border border-gray-200 px-4 py-3 shadow-sm">
                 <div className="flex items-center gap-4">
                     <span className="text-sm font-medium text-gray-700">Network Simulation Controls</span>
@@ -322,7 +321,13 @@ const Dashboard = () => {
                                             {tx.status}
                                         </span>
                                     </td>
-                                    <td className="px-4 py-3 text-right">
+                                    <td className="px-4 py-3 text-right flex justify-end gap-2">
+                                        <button 
+                                            onClick={() => setSelectedTx(tx)}
+                                            className="text-xs text-gray-600 hover:text-gray-900 font-medium border border-gray-200 bg-gray-50 hover:bg-gray-100 px-2 py-1 rounded-sm transition-colors"
+                                        >
+                                            Inspect
+                                        </button>
                                         {tx.status === 'pending' && (
                                             <button 
                                                 onClick={() => handleFlagTransaction(tx._id)}
@@ -344,7 +349,6 @@ const Dashboard = () => {
                         </tbody>
                     </table>
                 </div>
-                {/* conditional render for the load more control */}
                 {hasMore && (
                     <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 text-center">
                         <button 
@@ -356,6 +360,28 @@ const Dashboard = () => {
                     </div>
                 )}
             </div>
+
+            {/* raw data inspector modal overlay */}
+            {selectedTx && (
+                <div className="fixed inset-0 bg-gray-900/50 flex items-center justify-center z-50">
+                    <div className="bg-white border border-gray-200 shadow-lg w-full max-w-lg">
+                        <div className="flex justify-between items-center px-4 py-3 border-b border-gray-200 bg-gray-50">
+                            <h3 className="text-sm font-medium text-gray-900">Raw Payload Inspector</h3>
+                            <button 
+                                onClick={() => setSelectedTx(null)}
+                                className="text-gray-400 hover:text-gray-600"
+                            >
+                                close
+                            </button>
+                        </div>
+                        <div className="p-4 bg-gray-900 overflow-x-auto">
+                            <pre className="text-xs text-emerald-400 font-mono">
+                                {JSON.stringify(selectedTx, null, 2)}
+                            </pre>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
