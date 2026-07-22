@@ -6,10 +6,11 @@ const connectDB = require('./config/db');
 const transactionRoutes = require('./routes/transactionRoute.js');
 const fraudRoute = require('./routes/fraudRoute.js');
 const analyticRoute = require('./routes/analyticRoute.js')
+const authRoute = require('./routes/authRoutes.js');
 
 app.use(cors());
 app.use(express.json());
-
+app.use(cookieParser())
 
 connectDB();
 
@@ -20,6 +21,7 @@ app.get('/',(req,res) => {
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/fraud',fraudRoute);
 app.use('/api/analytics',analyticRoute);
+app.use('/api/auth', authRoutes)
 
 app.listen(process.env.PORT,() => {
     console.log(`Listening to port ${process.env.PORT}`);
