@@ -13,20 +13,27 @@ const Dashboard = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [isLive, setIsLive] = useState(false);
+    const [isDarkMode, setIsDarkMode] = useState(false); // Dark Mode State
 
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(false);
-    
-    // track which transaction is currently selected for the inspector
     const [selectedTx, setSelectedTx] = useState(null);
 
     const navigate = useNavigate();
+
+    // Dark Mode Effect
+    useEffect(() => {
+        if (isDarkMode) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    }, [isDarkMode]);
 
     const fetchDashboardData = async (silent = false, fetchPage = 1) => {
         if (!silent) setLoading(true);
         
         try {
-            // Include credentials on every single request so Express receives the JWT cookie
             const [statsRes, logsRes, txRes] = await Promise.all([
                 axios.get('http://localhost:5000/api/analytics', { withCredentials: true }),
                 axios.get('http://localhost:5000/api/fraud', { withCredentials: true }),
@@ -46,12 +53,9 @@ const Dashboard = () => {
             if (!silent) setLoading(false);
         } catch (error) {
             console.error("failed to fetch dashboard data:", error);
-            
-            // If the cookie is missing or invalid, redirect directly to the login page
             if (error.response?.status === 401) {
                 navigate('/login');
             }
-            
             if (!silent) setLoading(false);
         }
     };
@@ -78,7 +82,6 @@ const Dashboard = () => {
         });
 
         socket.on('dashboard_update', () => {
-            // Only pull new data automatically if the analyst has "Live Feed" turned on
             if (isLive) {
                 fetchDashboardData(true, 1);
                 setPage(1); 
@@ -97,7 +100,6 @@ const Dashboard = () => {
 
     const handleFlagTransaction = async (id, overrideReason = null) => {
         const reason = overrideReason || window.prompt("Enter reason for flagging this transaction:");
-        
         if (!reason) return;
 
         try {
@@ -150,7 +152,7 @@ const Dashboard = () => {
     };
 
     if (loading && transactions.length === 0) {
-        return <div className="text-gray-500 mt-20 text-center text-sm font-mono">loading transaction batch...</div>;
+        return <div className="text-gray-500 dark:text-gray-400 mt-20 text-center text-sm font-mono">loading transaction batch...</div>;
     }
 
     const anomalyRate = stats?.totalTransactions > 0 
@@ -164,64 +166,73 @@ const Dashboard = () => {
     });
 
     return (
-        <div className="space-y-8 relative">
-            <div className="flex justify-between items-center bg-white border border-gray-200 px-4 py-3 shadow-sm">
+        <div className="space-y-8 relative min-h-screen dark:bg-gray-900 transition-colors duration-200 pb-10">
+            {/* Header Controls */}
+            <div className="flex justify-between items-center bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 shadow-sm transition-colors duration-200">
                 <div className="flex items-center gap-4">
-                    <span className="text-sm font-medium text-gray-700">Network Simulation Controls</span>
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Sentinel SOC</span>
                     
                     <button 
                         onClick={() => setIsLive(!isLive)}
                         className={`flex items-center gap-2 text-xs px-3 py-1.5 border transition-colors ${
                             isLive 
-                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700' 
-                            : 'bg-gray-50 border-gray-200 text-gray-500'
+                            ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400' 
+                            : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-300'
                         }`}
                     >
-                        <div className={`w-1.5 h-1.5 rounded-full ${isLive ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`}></div>
+                        <div className={`w-1.5 h-1.5 rounded-full ${isLive ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400 dark:bg-gray-500'}`}></div>
                         {isLive ? 'Live Monitoring Active' : 'Enable Live Feed'}
+                    </button>
+
+                    <button 
+                        onClick={() => setIsDarkMode(!isDarkMode)}
+                        className="text-xs px-3 py-1.5 border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
+                    >
+                        {isDarkMode ? ' Light Mode' : ' Dark Mode'}
                     </button>
                 </div>
                 
                 <div className="flex gap-3">
                     <button 
                         onClick={() => injectPayload(false)}
-                        className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 border border-gray-300 transition-colors"
+                        className="text-xs bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-3 py-1.5 border border-gray-300 dark:border-gray-600 transition-colors"
                     >
                         Inject Standard Payload
                     </button>
                     <button 
                         onClick={() => injectPayload(true)}
-                        className="text-xs bg-red-50 hover:bg-red-100 text-red-700 px-3 py-1.5 border border-red-200 transition-colors"
+                        className="text-xs bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 text-red-700 dark:text-red-400 px-3 py-1.5 border border-red-200 dark:border-red-800 transition-colors"
                     >
                         Inject Anomaly Pattern
                     </button>
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4 px-4">
                 <div className="flex flex-col">
-                    <span className="text-gray-500 text-xs uppercase tracking-wider mb-1">Scanned Transactions</span>
-                    <span className="text-2xl text-gray-900">{stats?.totalTransactions || 0}</span>
+                    <span className="text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Scanned Transactions</span>
+                    <span className="text-2xl text-gray-900 dark:text-white">{stats?.totalTransactions || 0}</span>
                 </div>
                 <div className="flex flex-col">
-                    <span className="text-gray-500 text-xs uppercase tracking-wider mb-1">Processed Volume</span>
-                    <span className="text-2xl text-gray-900">${(stats?.totalVolume || 0).toLocaleString()}</span>
+                    <span className="text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Processed Volume</span>
+                    <span className="text-2xl text-gray-900 dark:text-white">${(stats?.totalVolume || 0).toLocaleString()}</span>
                 </div>
                 <div className="flex flex-col">
-                    <span className="text-gray-500 text-xs uppercase tracking-wider mb-1">Anomalies Detected</span>
-                    <span className="text-2xl text-red-600 font-medium">{stats?.flaggedTransactions || 0}</span>
+                    <span className="text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Anomalies Detected</span>
+                    <span className="text-2xl text-red-600 dark:text-red-500 font-medium">{stats?.flaggedTransactions || 0}</span>
                 </div>
                 <div className="flex flex-col">
-                    <span className="text-gray-500 text-xs uppercase tracking-wider mb-1">Anomaly Rate</span>
-                    <span className="text-2xl text-gray-900">{anomalyRate}%</span>
+                    <span className="text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-1">Anomaly Rate</span>
+                    <span className="text-2xl text-gray-900 dark:text-white">{anomalyRate}%</span>
                 </div>
             </div>
 
             {/* Live Volume Chart */}
-            <div className="border border-gray-200 bg-white shadow-sm">
-                <div className="px-4 py-3 border-b border-gray-200 bg-gray-50/50 flex justify-between items-center">
-                    <h2 className="text-sm font-medium text-gray-700">Live Transaction Volume</h2>
-                    <span className="flex items-center gap-2 text-xs text-gray-500">
+            <div className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm mx-4 transition-colors duration-200">
+                <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 flex justify-between items-center">
+                    <h2 className="text-sm font-medium text-gray-700 dark:text-gray-200">Live Transaction Volume</h2>
+                    <span className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                         <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Standard
                         <span className="w-2 h-2 rounded-full bg-red-500 ml-2"></span> Flagged
                     </span>
@@ -229,21 +240,21 @@ const Dashboard = () => {
                 <div className="h-64 w-full p-4">
                     <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={chartData}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDarkMode ? "#374151" : "#e5e7eb"} />
                             <XAxis 
                                 dataKey="time" 
-                                tick={{fontSize: 10, fill: '#6b7280'}} 
+                                tick={{fontSize: 10, fill: isDarkMode ? '#9ca3af' : '#6b7280'}} 
                                 tickLine={false} 
                                 axisLine={false} 
                             />
                             <YAxis 
-                                tick={{fontSize: 10, fill: '#6b7280'}} 
+                                tick={{fontSize: 10, fill: isDarkMode ? '#9ca3af' : '#6b7280'}} 
                                 tickLine={false} 
                                 axisLine={false} 
                                 tickFormatter={(value) => `$${value}`}
                             />
                             <Tooltip 
-                                contentStyle={{ backgroundColor: '#111827', border: 'none', borderRadius: '4px', fontSize: '12px', color: '#fff' }}
+                                contentStyle={{ backgroundColor: isDarkMode ? '#1f2937' : '#111827', border: 'none', borderRadius: '4px', fontSize: '12px', color: '#fff' }}
                                 itemStyle={{ color: '#fff' }}
                             />
                             <Line 
@@ -270,14 +281,15 @@ const Dashboard = () => {
                 </div>
             </div>
 
-            <div className="border border-gray-200 bg-white shadow-sm">
-                <div className="px-4 py-3 border-b border-gray-200 bg-gray-50/50">
-                    <h2 className="text-sm font-medium text-gray-700">Anomaly Log</h2>
+            {/* Anomaly Log */}
+            <div className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm mx-4 transition-colors duration-200">
+                <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+                    <h2 className="text-sm font-medium text-gray-700 dark:text-gray-200">Anomaly Log</h2>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
                         <thead>
-                            <tr className="border-b border-gray-200 text-gray-500 bg-white">
+                            <tr className="border-b border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800">
                                 <th className="px-4 py-2 font-normal text-xs">Time Detected</th>
                                 <th className="px-4 py-2 font-normal text-xs">Risk Level</th>
                                 <th className="px-4 py-2 font-normal text-xs">Anomaly Details</th>
@@ -285,29 +297,29 @@ const Dashboard = () => {
                                 <th className="px-4 py-2 font-normal text-xs text-right">Action</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
+                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                             {(Array.isArray(fraudLogs) ? fraudLogs : []).map((log) => (
-                                <tr key={log._id} className="hover:bg-gray-50 transition-colors">
-                                    <td className="px-4 py-3 text-gray-500 font-mono text-xs">
+                                <tr key={log._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                    <td className="px-4 py-3 text-gray-500 dark:text-gray-400 font-mono text-xs">
                                         {new Date(log.createdAt).toLocaleString()}
                                     </td>
                                     <td className="px-4 py-3">
                                         <span className={`font-medium text-xs ${
-                                            log.severity === 'critical' ? 'text-red-700' : 
-                                            log.severity === 'high' ? 'text-orange-700' : 
-                                            'text-yellow-700'
+                                            log.severity === 'critical' ? 'text-red-700 dark:text-red-400' : 
+                                            log.severity === 'high' ? 'text-orange-700 dark:text-orange-400' : 
+                                            'text-yellow-700 dark:text-yellow-400'
                                         }`}>
                                             {(log.severity || '').toUpperCase()}
                                         </span>
                                     </td>
-                                    <td className="px-4 py-3 text-gray-800 text-sm">{log.reason}</td>
-                                    <td className="px-4 py-3 text-gray-500 font-mono text-xs">
+                                    <td className="px-4 py-3 text-gray-800 dark:text-gray-200 text-sm">{log.reason}</td>
+                                    <td className="px-4 py-3 text-gray-500 dark:text-gray-400 font-mono text-xs">
                                         {log.transactionId?.amount || '0'} {log.transactionId?.currency || ''}
                                     </td>
                                     <td className="px-4 py-3 text-right">
                                         <button 
                                             onClick={() => handleResolveIncident(log._id)}
-                                            className="text-xs text-emerald-600 hover:text-emerald-800 font-medium border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-sm transition-colors"
+                                            className="text-xs text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 font-medium border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 px-2 py-1 rounded-sm transition-colors"
                                         >
                                             Resolve
                                         </button>
@@ -316,7 +328,7 @@ const Dashboard = () => {
                             ))}
                             {(!Array.isArray(fraudLogs) || fraudLogs.length === 0) && (
                                 <tr>
-                                    <td colSpan="5" className="px-4 py-8 text-center text-gray-400 text-sm">
+                                    <td colSpan="5" className="px-4 py-8 text-center text-gray-400 dark:text-gray-500 text-sm">
                                         no anomalies detected in current batch.
                                     </td>
                                 </tr>
@@ -326,9 +338,10 @@ const Dashboard = () => {
                 </div>
             </div>
 
-            <div className="border border-gray-200 bg-white shadow-sm">
-                <div className="px-4 py-3 border-b border-gray-200 bg-gray-50/50 flex justify-between items-center">
-                    <h2 className="text-sm font-medium text-gray-700">Raw Transaction Feed</h2>
+            {/* Raw Transaction Feed */}
+            <div className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm mx-4 transition-colors duration-200">
+                <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 flex justify-between items-center">
+                    <h2 className="text-sm font-medium text-gray-700 dark:text-gray-200">Raw Transaction Feed</h2>
                     
                     <div className="flex gap-3">
                         <input 
@@ -336,12 +349,12 @@ const Dashboard = () => {
                             placeholder="search account ID"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="text-xs border border-gray-300 px-2 py-1.5 focus:outline-none focus:border-gray-500 w-48"
+                            className="text-xs border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-2 py-1.5 focus:outline-none focus:border-gray-500 dark:focus:border-gray-400 w-48"
                         />
                         <select 
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value)}
-                            className="text-xs border border-gray-300 px-2 py-1.5 focus:outline-none focus:border-gray-500 bg-white"
+                            className="text-xs border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-2 py-1.5 focus:outline-none focus:border-gray-500"
                         >
                             <option value="all">All Statuses</option>
                             <option value="pending">Pending</option>
@@ -352,8 +365,8 @@ const Dashboard = () => {
                 </div>
                 <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
                     <table className="w-full text-left text-sm">
-                        <thead className="sticky top-0 bg-white z-10">
-                            <tr className="border-b border-gray-200 text-gray-500">
+                        <thead className="sticky top-0 bg-white dark:bg-gray-800 z-10">
+                            <tr className="border-b border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400">
                                 <th className="px-4 py-2 font-normal text-xs">Timestamp</th>
                                 <th className="px-4 py-2 font-normal text-xs">Sender</th>
                                 <th className="px-4 py-2 font-normal text-xs">Receiver</th>
@@ -362,29 +375,29 @@ const Dashboard = () => {
                                 <th className="px-4 py-2 font-normal text-xs text-right">Action</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
+                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                             {filteredTransactions.map((tx) => (
-                                <tr key={tx._id} className="hover:bg-gray-50 transition-colors">
-                                    <td className="px-4 py-3 text-gray-500 font-mono text-xs">
+                                <tr key={tx._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                    <td className="px-4 py-3 text-gray-500 dark:text-gray-400 font-mono text-xs">
                                         {new Date(tx.createdAt).toLocaleString()}
                                     </td>
-                                    <td className="px-4 py-3 text-gray-800 font-mono text-xs">
+                                    <td className="px-4 py-3 text-gray-800 dark:text-gray-300 font-mono text-xs">
                                         {searchTerm && tx.senderAccount.includes(searchTerm) ? (
-                                            <span className="bg-yellow-100">{tx.senderAccount}</span>
+                                            <span className="bg-yellow-100 dark:bg-yellow-900/50 dark:text-yellow-200">{tx.senderAccount}</span>
                                         ) : tx.senderAccount}
                                     </td>
-                                    <td className="px-4 py-3 text-gray-800 font-mono text-xs">
+                                    <td className="px-4 py-3 text-gray-800 dark:text-gray-300 font-mono text-xs">
                                         {searchTerm && tx.receiverAccount.includes(searchTerm) ? (
-                                            <span className="bg-yellow-100">{tx.receiverAccount}</span>
+                                            <span className="bg-yellow-100 dark:bg-yellow-900/50 dark:text-yellow-200">{tx.receiverAccount}</span>
                                         ) : tx.receiverAccount}
                                     </td>
-                                    <td className="px-4 py-3 text-gray-900 font-medium">
+                                    <td className="px-4 py-3 text-gray-900 dark:text-white font-medium">
                                         {tx.amount} {tx.currency}
                                     </td>
                                     <td className="px-4 py-3">
                                         <span className={`text-xs ${
-                                            tx.status === 'flagged' ? 'text-red-600' : 
-                                            tx.status === 'resolved' ? 'text-emerald-600' : 'text-gray-500'
+                                            tx.status === 'flagged' ? 'text-red-600 dark:text-red-400' : 
+                                            tx.status === 'resolved' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-gray-400'
                                         }`}>
                                             {tx.status}
                                         </span>
@@ -392,14 +405,14 @@ const Dashboard = () => {
                                     <td className="px-4 py-3 text-right flex justify-end gap-2">
                                         <button 
                                             onClick={() => setSelectedTx(tx)}
-                                            className="text-xs text-gray-600 hover:text-gray-900 font-medium border border-gray-200 bg-gray-50 hover:bg-gray-100 px-2 py-1 rounded-sm transition-colors"
+                                            className="text-xs text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 px-2 py-1 rounded-sm transition-colors"
                                         >
                                             Inspect
                                         </button>
                                         {tx.status === 'pending' && (
                                             <button 
                                                 onClick={() => handleFlagTransaction(tx._id)}
-                                                className="text-xs text-red-600 hover:text-red-800 font-medium border border-red-200 bg-red-50 hover:bg-red-100 px-2 py-1 rounded-sm transition-colors"
+                                                className="text-xs text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 font-medium border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/50 px-2 py-1 rounded-sm transition-colors"
                                             >
                                                 Flag
                                             </button>
@@ -409,7 +422,7 @@ const Dashboard = () => {
                             ))}
                             {filteredTransactions.length === 0 && (
                                 <tr>
-                                    <td colSpan="6" className="px-4 py-8 text-center text-gray-400 text-sm">
+                                    <td colSpan="6" className="px-4 py-8 text-center text-gray-400 dark:text-gray-500 text-sm">
                                         no transactions match current filters.
                                     </td>
                                 </tr>
@@ -418,10 +431,10 @@ const Dashboard = () => {
                     </table>
                 </div>
                 {hasMore && (
-                    <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 text-center">
+                    <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 text-center">
                         <button 
                             onClick={loadMoreTransactions}
-                            className="text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors"
+                            className="text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
                         >
                             Load Older Transactions
                         </button>
@@ -429,15 +442,15 @@ const Dashboard = () => {
                 )}
             </div>
 
-            {/* raw data inspector modal overlay */}
+            {/* Modal */}
             {selectedTx && (
                 <div className="fixed inset-0 bg-gray-900/50 flex items-center justify-center z-50">
-                    <div className="bg-white border border-gray-200 shadow-lg w-full max-w-lg">
-                        <div className="flex justify-between items-center px-4 py-3 border-b border-gray-200 bg-gray-50">
-                            <h3 className="text-sm font-medium text-gray-900">Raw Payload Inspector</h3>
+                    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg w-full max-w-lg">
+                        <div className="flex justify-between items-center px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+                            <h3 className="text-sm font-medium text-gray-900 dark:text-gray-200">Raw Payload Inspector</h3>
                             <button 
                                 onClick={() => setSelectedTx(null)}
-                                className="text-gray-400 hover:text-gray-600"
+                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                             >
                                 close
                             </button>
@@ -450,8 +463,6 @@ const Dashboard = () => {
                     </div>
                 </div>
             )}
-
-            
         </div>
     );
 };
