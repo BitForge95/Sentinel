@@ -9,7 +9,7 @@ const registerUser = async (req,res) => {
     const user = await User.findOne({email : email});
 
     if(user) {
-        return res.status(404).json({error : "Username not found"});
+        return res.status(404).json({error : "A user with this email already exists"});
     }
 
     try {
