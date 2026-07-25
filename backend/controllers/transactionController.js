@@ -1,17 +1,32 @@
 const Transaction = require('../models/Transaction');
+const {analyzeTransaction} = require('../services/aiService');
+const FraudLog = require('../models/FraudLog');
 
 const generateMockTransaction = async (req,res) => {
     try {
         const db_data = req.body;
+
+        const aiVerdict = await analyzeTransaction(db_data);
+
         const dummy = new Transaction({
             senderAccount : db_data.senderAccount,
             receiverAccount : db_data.receiverAccount,
             amount : db_data.amount,
             currency : db_data.currency,
+            status: aiVerdict.isFraud ? 'flagged' : 'pending',
         });
         //Insetad of just sending the new Transaction(req.body) I have whitelisted the necessary entries
 
         await dummy.save();
+
+        // If AI found fraud , logging the fraud transaction the FraudLog just for future ref
+        if(aiVerdict.isFraud) {
+            await FraudLog.create({
+                transactionId : dummy._id,
+                reason : aiVerdect.reason,
+                severity : 'High',
+            })
+        }
 
         res.status(201).json(dummy);
     } catch (error) {
