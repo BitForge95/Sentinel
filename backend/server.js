@@ -10,9 +10,12 @@ const authRoute = require('./routes/authRoutes.js');
 const cookieParser = require('cookie-parser');
 const Protect = require('./middleware/authMiddleware.js')
 
-app.use(cors());
+app.use(cors({
+    origin: 'http://localhost:5173', 
+    credentials: true                
+}));
 app.use(express.json());
-app.use(cookieParser())
+app.use(cookieParser());
 
 connectDB();
 

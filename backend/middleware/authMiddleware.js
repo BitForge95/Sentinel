@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
 async function Protect(req,res,next) {
-    let token = req.cookies.jwt;
+    let token = req.cookies.auth_token;
 
     if(!token) {
         return res.status(401).json({error : "Not authorized, no token"})
@@ -11,7 +11,7 @@ async function Protect(req,res,next) {
     try {
         const decodeToken = jwt.verify(token,process.env.JWT_SECRET);
         
-        const authUserId = decodeToken.userId;
+        const authUserId = decodeToken.id;
 
         const userAuth = await User.findById(authUserId).select('-password');
 

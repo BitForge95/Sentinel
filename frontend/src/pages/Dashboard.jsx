@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
 const Dashboard = () => {
     const [stats, setStats] = useState({ totalTransactions: 0, flaggedTransactions: 0, totalVolume: 0 });
@@ -16,33 +18,38 @@ const Dashboard = () => {
     // track which transaction is currently selected for the inspector
     const [selectedTx, setSelectedTx] = useState(null);
 
+    const navigate = useNavigate();
+
     const fetchDashboardData = async (silent = false, fetchPage = 1) => {
         if (!silent) setLoading(true);
         
         try {
+            // Include credentials on every single request so Express receives the JWT cookie
             const [statsRes, logsRes, txRes] = await Promise.all([
-                fetch('http://localhost:5000/api/analytics'),
-                fetch('http://localhost:5000/api/fraud'),
-                fetch(`http://localhost:5000/api/transactions?page=${fetchPage}&limit=50`)
+                axios.get('http://localhost:5000/api/analytics', { withCredentials: true }),
+                axios.get('http://localhost:5000/api/fraud', { withCredentials: true }),
+                axios.get(`http://localhost:5000/api/transactions?page=${fetchPage}&limit=50`, { withCredentials: true })
             ]);
-            
-            const statsData = await statsRes.json();
-            const logsData = await logsRes.json();
-            const txData = await txRes.json();
 
-            setStats(statsData);
-            setFraudLogs(logsData);
+            setStats(statsRes.data);
+            setFraudLogs(logsRes.data);
             
             if (fetchPage === 1) {
-                setTransactions(txData.transactions);
+                setTransactions(txRes.data.transactions || []);
             } else {
-                setTransactions(prev => [...prev, ...txData.transactions]);
+                setTransactions(prev => [...prev, ...(txRes.data.transactions || [])]);
             }
             
-            setHasMore(txData.currentPage < txData.totalPages);
+            setHasMore(txRes.data.currentPage < txRes.data.totalPages);
             if (!silent) setLoading(false);
         } catch (error) {
             console.error("failed to fetch dashboard data:", error);
+            
+            // If the cookie is missing or invalid, redirect directly to the login page
+            if (error.response?.status === 401) {
+                navigate('/login');
+            }
+            
             if (!silent) setLoading(false);
         }
     };
@@ -75,30 +82,25 @@ const Dashboard = () => {
         if (!reason) return;
 
         try {
-            const response = await fetch(`http://localhost:5000/api/fraud/${id}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    reason: reason,
-                    severity: overrideReason ? 'high' : 'medium'
-                })
-            });
+            await axios.post(`http://localhost:5000/api/fraud/${id}`, {
+                reason: reason,
+                severity: overrideReason ? 'high' : 'medium'
+            }, { withCredentials: true });
 
-            if (response.ok) fetchDashboardData(true, 1);
+            fetchDashboardData(true, 1);
         } catch (error) {
             console.error("failed to flag transaction:", error);
+            if (error.response?.status === 401) navigate('/login');
         }
     };
 
     const handleResolveIncident = async (logId) => {
         try {
-            const response = await fetch(`http://localhost:5000/api/fraud/${logId}/resolve`, {
-                method: 'DELETE'
-            });
-
-            if (response.ok) fetchDashboardData(true, 1);
+            await axios.delete(`http://localhost:5000/api/fraud/${logId}/resolve`, { withCredentials: true });
+            fetchDashboardData(true, 1);
         } catch (error) {
             console.error("failed to resolve incident:", error);
+            if (error.response?.status === 401) navigate('/login');
         }
     };
 
@@ -111,18 +113,11 @@ const Dashboard = () => {
         };
 
         try {
-            const response = await fetch('http://localhost:5000/api/transactions/generate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+            const response = await axios.post('http://localhost:5000/api/transactions/generate', payload, {
+                withCredentials: true
             });
 
-            const newTx = await response.json();
-
-            if (!response.ok) {
-                console.error("backend validation failed:", newTx);
-                return; 
-            }
+            const newTx = response.data;
 
             if (isAnomaly && newTx._id) {
                 await handleFlagTransaction(newTx._id, "System Alert: Suspicious high volume transfer");
@@ -130,7 +125,8 @@ const Dashboard = () => {
                 fetchDashboardData(true, 1);
             }
         } catch (error) {
-            console.error("network connection failed:", error);
+            console.error("network or validation failed:", error);
+            if (error.response?.status === 401) navigate('/login');
         }
     };
 
@@ -138,11 +134,11 @@ const Dashboard = () => {
         return <div className="text-gray-500 mt-20 text-center text-sm font-mono">loading transaction batch...</div>;
     }
 
-    const anomalyRate = stats.totalTransactions > 0 
+    const anomalyRate = stats?.totalTransactions > 0 
         ? ((stats.flaggedTransactions / stats.totalTransactions) * 100).toFixed(2) 
         : 0;
 
-    const filteredTransactions = transactions.filter(tx => {
+    const filteredTransactions = (transactions || []).filter(tx => {
         const matchesSearch = tx.senderAccount.includes(searchTerm) || tx.receiverAccount.includes(searchTerm);
         const matchesStatus = statusFilter === 'all' || tx.status === statusFilter;
         return matchesSearch && matchesStatus;
@@ -186,15 +182,15 @@ const Dashboard = () => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4">
                 <div className="flex flex-col">
                     <span className="text-gray-500 text-xs uppercase tracking-wider mb-1">Scanned Transactions</span>
-                    <span className="text-2xl text-gray-900">{stats.totalTransactions}</span>
+                    <span className="text-2xl text-gray-900">{stats?.totalTransactions || 0}</span>
                 </div>
                 <div className="flex flex-col">
                     <span className="text-gray-500 text-xs uppercase tracking-wider mb-1">Processed Volume</span>
-                    <span className="text-2xl text-gray-900">${stats.totalVolume.toLocaleString()}</span>
+                    <span className="text-2xl text-gray-900">${(stats?.totalVolume || 0).toLocaleString()}</span>
                 </div>
                 <div className="flex flex-col">
                     <span className="text-gray-500 text-xs uppercase tracking-wider mb-1">Anomalies Detected</span>
-                    <span className="text-2xl text-red-600 font-medium">{stats.flaggedTransactions}</span>
+                    <span className="text-2xl text-red-600 font-medium">{stats?.flaggedTransactions || 0}</span>
                 </div>
                 <div className="flex flex-col">
                     <span className="text-gray-500 text-xs uppercase tracking-wider mb-1">Anomaly Rate</span>
@@ -218,7 +214,7 @@ const Dashboard = () => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {fraudLogs.map((log) => (
+                            {(Array.isArray(fraudLogs) ? fraudLogs : []).map((log) => (
                                 <tr key={log._id} className="hover:bg-gray-50 transition-colors">
                                     <td className="px-4 py-3 text-gray-500 font-mono text-xs">
                                         {new Date(log.createdAt).toLocaleString()}
@@ -229,7 +225,7 @@ const Dashboard = () => {
                                             log.severity === 'high' ? 'text-orange-700' : 
                                             'text-yellow-700'
                                         }`}>
-                                            {log.severity.toUpperCase()}
+                                            {(log.severity || '').toUpperCase()}
                                         </span>
                                     </td>
                                     <td className="px-4 py-3 text-gray-800 text-sm">{log.reason}</td>
@@ -246,7 +242,7 @@ const Dashboard = () => {
                                     </td>
                                 </tr>
                             ))}
-                            {fraudLogs.length === 0 && (
+                            {(!Array.isArray(fraudLogs) || fraudLogs.length === 0) && (
                                 <tr>
                                     <td colSpan="5" className="px-4 py-8 text-center text-gray-400 text-sm">
                                         no anomalies detected in current batch.

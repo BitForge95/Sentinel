@@ -1,9 +1,9 @@
 const User = require('../models/User')
-const generateToken = require('../utilis/generateToken')
+const {generateToken} = require('../utilis/generateToken')
 
 const registerUser = async (req,res) => {
     const email = req.body.email;
-    const username = req.body.username;
+    const username = req.body.name || req.body.username;
     const password = req.body.password;
 
     const user = await User.findOne({email : email});
@@ -23,6 +23,7 @@ const registerUser = async (req,res) => {
 
         res.status(201).json({ _id: newUser._id, username: newUser.username, email: newUser.email });
     } catch (error) {
+        console.error("Registration failed:", error.message);
         res.status(500).json({error : "User not created"});
     }
 
