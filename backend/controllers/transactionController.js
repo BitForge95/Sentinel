@@ -28,6 +28,8 @@ const generateMockTransaction = async (req,res) => {
             })
         }
 
+        req.io.emit('dashboard_update');
+
         res.status(201).json(dummy);
     } catch (error) {
         res.status(500).json({error : error.message});

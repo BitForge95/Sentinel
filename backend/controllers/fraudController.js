@@ -15,6 +15,8 @@ const flagTransaction = async (req,res) => {
 
         await newFraudLog.save();
 
+        req.io.emit('dashboard_update');
+
         res.status(201).json(newFraudLog);
     } catch (error) {
         res.status(500).json({error : error.message});
@@ -48,6 +50,8 @@ const resolveIncident = async (req, res) => {
 
         // remove the log from the active threats table
         await FraudLog.findByIdAndDelete(logId);
+
+        req.io.emit('dashboard_update');
 
         res.status(200).json({ message: 'incident resolved successfully' });
     } catch (error) {
