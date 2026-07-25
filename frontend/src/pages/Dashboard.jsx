@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { io } from 'socket.io-client';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const Dashboard = () => {
     const [stats, setStats] = useState({ totalTransactions: 0, flaggedTransactions: 0, totalVolume: 0 });
@@ -54,6 +55,16 @@ const Dashboard = () => {
             if (!silent) setLoading(false);
         }
     };
+
+    const chartData = [...(transactions || [])]
+        .slice(0, 20)
+        .reverse()
+        .map(tx => ({
+            time: new Date(tx.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            amount: tx.amount,
+            status: tx.status,
+            isAnomaly: tx.status === 'flagged' 
+        }));
 
     useEffect(() => {
         fetchDashboardData(false, 1);
@@ -203,6 +214,59 @@ const Dashboard = () => {
                 <div className="flex flex-col">
                     <span className="text-gray-500 text-xs uppercase tracking-wider mb-1">Anomaly Rate</span>
                     <span className="text-2xl text-gray-900">{anomalyRate}%</span>
+                </div>
+            </div>
+
+            {/* Live Volume Chart */}
+            <div className="border border-gray-200 bg-white shadow-sm">
+                <div className="px-4 py-3 border-b border-gray-200 bg-gray-50/50 flex justify-between items-center">
+                    <h2 className="text-sm font-medium text-gray-700">Live Transaction Volume</h2>
+                    <span className="flex items-center gap-2 text-xs text-gray-500">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Standard
+                        <span className="w-2 h-2 rounded-full bg-red-500 ml-2"></span> Flagged
+                    </span>
+                </div>
+                <div className="h-64 w-full p-4">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={chartData}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                            <XAxis 
+                                dataKey="time" 
+                                tick={{fontSize: 10, fill: '#6b7280'}} 
+                                tickLine={false} 
+                                axisLine={false} 
+                            />
+                            <YAxis 
+                                tick={{fontSize: 10, fill: '#6b7280'}} 
+                                tickLine={false} 
+                                axisLine={false} 
+                                tickFormatter={(value) => `$${value}`}
+                            />
+                            <Tooltip 
+                                contentStyle={{ backgroundColor: '#111827', border: 'none', borderRadius: '4px', fontSize: '12px', color: '#fff' }}
+                                itemStyle={{ color: '#fff' }}
+                            />
+                            <Line 
+                                type="monotone" 
+                                dataKey="amount" 
+                                stroke="#10b981" 
+                                strokeWidth={2} 
+                                dot={(props) => {
+                                    const { cx, cy, payload } = props;
+                                    return (
+                                        <circle 
+                                            key={`dot-${payload.time}-${payload.amount}`} 
+                                            cx={cx} 
+                                            cy={cy} 
+                                            r={4} 
+                                            fill={payload.isAnomaly ? "#ef4444" : "#10b981"} 
+                                            stroke="none" 
+                                        />
+                                    );
+                                }} 
+                            />
+                        </LineChart>
+                    </ResponsiveContainer>
                 </div>
             </div>
 
@@ -386,6 +450,8 @@ const Dashboard = () => {
                     </div>
                 </div>
             )}
+
+            
         </div>
     );
 };
