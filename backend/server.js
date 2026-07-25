@@ -53,7 +53,7 @@ app.use('/api/fraud',fraudRoute);
 app.use('/api/analytics',analyticRoute);
 app.use('/api/auth', authRoute);
 
-app.listen(process.env.PORT,() => {
+server.listen(process.env.PORT,() => {
     console.log(`Listening to port ${process.env.PORT}`);
 });
 

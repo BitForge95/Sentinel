@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { io } from 'socket.io-client';
 
 const Dashboard = () => {
     const [stats, setStats] = useState({ totalTransactions: 0, flaggedTransactions: 0, totalVolume: 0 });
@@ -57,16 +58,23 @@ const Dashboard = () => {
     useEffect(() => {
         fetchDashboardData(false, 1);
 
-        let pollInterval;
-        if (isLive) {
-            pollInterval = setInterval(() => {
+        const socket = io('http://localhost:5000', {
+            withCredentials: true
+        });
+
+        socket.on('connect', () => {
+            console.log('WebSocket Connected to Sentinel API');
+        });
+
+        socket.on('dashboard_update', () => {
+            // Only pull new data automatically if the analyst has "Live Feed" turned on
+            if (isLive) {
                 fetchDashboardData(true, 1);
                 setPage(1); 
-            }, 3000);
-        }
-
+            }
+        });
         return () => {
-            if (pollInterval) clearInterval(pollInterval);
+            socket.disconnect();
         };
     }, [isLive]);
 
