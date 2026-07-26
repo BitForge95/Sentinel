@@ -121,7 +121,13 @@ const Dashboard = () => {
             fetchDashboardData(true, 1);
         } catch (error) {
             console.error("failed to resolve incident:", error);
-            if (error.response?.status === 401) navigate('/login');
+            if (error.response?.status === 401) {
+                navigate('/login');
+            }
+            else if (error.response?.status === 403) {
+                // Catch the RBAC block and alert the user
+                window.alert("Access Denied: Only Admin accounts can resolve security incidents.");
+            }
         }
     };
 
