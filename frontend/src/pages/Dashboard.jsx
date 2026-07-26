@@ -171,6 +171,39 @@ const Dashboard = () => {
         return matchesSearch && matchesStatus;
     });
 
+    const exportToCSV = () => {
+        if (filteredTransactions.length === 0) {
+            window.alert("No data to export.");
+            return;
+        }
+
+        const headers = ['Timestamp', 'Sender', 'Receiver', 'Amount', 'Currency', 'Status'];
+        const csvRows = [headers.join(',')];
+
+        filteredTransactions.forEach(tx => {
+            const row = [
+                `"${new Date(tx.createdAt).toLocaleString()}"`, // Wrap in quotes to prevent comma splitting
+                `"${tx.senderAccount}"`,
+                `"${tx.receiverAccount}"`,
+                `"${tx.amount}"`,
+                `"${tx.currency}"`,
+                `"${tx.status}"`
+            ];
+            csvRows.push(row.join(','));
+        });
+
+        const csvString = csvRows.join('\n');
+        const blob = new Blob([csvString], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `sentinel_export_${new Date().getTime()}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     return (
         <div className="space-y-8 relative min-h-screen dark:bg-gray-900 transition-colors duration-200 pb-10">
             {/* Header Controls */}
@@ -350,6 +383,12 @@ const Dashboard = () => {
                     <h2 className="text-sm font-medium text-gray-700 dark:text-gray-200">Raw Transaction Feed</h2>
                     
                     <div className="flex gap-3">
+                        <button 
+                            onClick={exportToCSV}
+                            className="text-xs bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-400 px-3 py-1.5 border border-blue-200 dark:border-blue-800 transition-colors mr-2"
+                        >
+                            Export CSV
+                        </button>
                         <input 
                             type="text"
                             placeholder="search account ID"
