@@ -1,36 +1,41 @@
 const Transaction = require('../models/Transaction');
 const {analyzeTransaction} = require('../services/aiService');
 const FraudLog = require('../models/FraudLog');
+const {transactionQueue} = require('../services/queueService');
 
 const generateMockTransaction = async (req,res) => {
     try {
-        const db_data = req.body;
+        // const db_data = req.body;
+        await transactionQueue.add('process-tx', req.body);
 
-        const aiVerdict = await analyzeTransaction(db_data);
+        return res.status(202).json({ message: "Payload accepted and queued." });
 
-        const dummy = new Transaction({
-            senderAccount : db_data.senderAccount,
-            receiverAccount : db_data.receiverAccount,
-            amount : db_data.amount,
-            currency : db_data.currency,
-            status: aiVerdict.isFraud ? 'flagged' : 'pending',
-        });
-        //Insetad of just sending the new Transaction(req.body) I have whitelisted the necessary entries
+        // Commented due to bullmq logic
+        // const aiVerdict = await analyzeTransaction(db_data);
 
-        await dummy.save();
+        // const dummy = new Transaction({
+        //     senderAccount : db_data.senderAccount,
+        //     receiverAccount : db_data.receiverAccount,
+        //     amount : db_data.amount,
+        //     currency : db_data.currency,
+        //     status: aiVerdict.isFraud ? 'flagged' : 'pending',
+        // });
+        // //Insetad of just sending the new Transaction(req.body) I have whitelisted the necessary entries
 
-        // If AI found fraud , logging the fraud transaction the FraudLog just for future ref
-        if(aiVerdict.isFraud) {
-            await FraudLog.create({
-                transactionId : dummy._id,
-                reason : aiVerdect.reason,
-                severity : 'High',
-            })
-        }
+        // await dummy.save();
 
-        req.io.emit('dashboard_update');
+        // // If AI found fraud , logging the fraud transaction the FraudLog just for future ref
+        // if(aiVerdict.isFraud) {
+        //     await FraudLog.create({
+        //         transactionId : dummy._id,
+        //         reason : aiVerdect.reason,
+        //         severity : 'High',
+        //     })
+        // }
 
-        res.status(201).json(dummy);
+        // req.io.emit('dashboard_update');
+
+        // res.status(201).json(dummy);
     } catch (error) {
         res.status(500).json({error : error.message});
     }

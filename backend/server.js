@@ -10,7 +10,8 @@ const fraudRoute = require('./routes/fraudRoute.js');
 const analyticRoute = require('./routes/analyticRoute.js')
 const authRoute = require('./routes/authRoutes.js');
 const cookieParser = require('cookie-parser');
-const Protect = require('./middleware/authMiddleware.js')
+const Protect = require('./middleware/authMiddleware.js');
+const {initWorker} = require('./services/queueService.js');
 
 app.use(cors({
     origin: 'http://localhost:5173', 
@@ -52,6 +53,8 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/fraud',fraudRoute);
 app.use('/api/analytics',analyticRoute);
 app.use('/api/auth', authRoute);
+
+initWorker(io);
 
 server.listen(process.env.PORT,() => {
     console.log(`Listening to port ${process.env.PORT}`);
