@@ -47,9 +47,21 @@ const getAllTransactions = async (req,res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 50;
         const skip = (page - 1) * limit;
+        const searchTerm = req.query.search || "";
+
+        const query = {};
+
+        if(searchTerm) {
+
+            query.$or = [
+                { senderAccount : {$regex : searchTerm, $options : 'i'}},
+                { receiverAccount : {$regex : searchTerm , $options : 'i'}},
+                { status: { $regex: searchTerm, $options: 'i' }},
+            ]
+        }
 
 
-        const transactions = await Transaction.find().sort({createdAt : -1}).skip(skip).limit(limit);
+        const transactions = await Transaction.find(query).sort({createdAt : -1}).skip(skip).limit(limit);
 
         const total = await Transaction.countDocuments();
 
