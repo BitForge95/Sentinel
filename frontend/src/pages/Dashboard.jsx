@@ -13,7 +13,7 @@ const Dashboard = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [isLive, setIsLive] = useState(false);
-    const [isDarkMode, setIsDarkMode] = useState(false); // Dark Mode State
+    const [isDarkMode, setIsDarkMode] = useState(false);
 
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(false);
@@ -21,7 +21,6 @@ const Dashboard = () => {
 
     const navigate = useNavigate();
 
-    // Dark Mode Effect
     useEffect(() => {
         if (isDarkMode) {
             document.documentElement.classList.add('dark');
@@ -30,14 +29,16 @@ const Dashboard = () => {
         }
     }, [isDarkMode]);
 
-    const fetchDashboardData = async (silent = false, fetchPage = 1) => {
+    // 1. Updated fetch function to accept searchQuery
+    const fetchDashboardData = async (silent = false, fetchPage = 1, searchQuery = "") => {
         if (!silent) setLoading(true);
         
         try {
             const [statsRes, logsRes, txRes] = await Promise.all([
                 axios.get('http://localhost:5000/api/analytics', { withCredentials: true }),
                 axios.get('http://localhost:5000/api/fraud', { withCredentials: true }),
-                axios.get(`http://localhost:5000/api/transactions?page=${fetchPage}&limit=50`, { withCredentials: true })
+                // 2. Appended search parameter to the backend URL
+                axios.get(`http://localhost:5000/api/transactions?page=${fetchPage}&limit=50&search=${searchQuery}`, { withCredentials: true })
             ]);
 
             setStats(statsRes.data);
@@ -71,7 +72,8 @@ const Dashboard = () => {
         }));
 
     useEffect(() => {
-        fetchDashboardData(false, 1);
+        // Pass current searchTerm on initial load/reconnect
+        fetchDashboardData(false, 1, searchTerm);
 
         const socket = io('http://localhost:5000', {
             withCredentials: true
@@ -83,7 +85,7 @@ const Dashboard = () => {
 
         socket.on('dashboard_update', () => {
             if (isLive) {
-                fetchDashboardData(true, 1);
+                fetchDashboardData(true, 1, searchTerm);
                 setPage(1); 
             }
         });
@@ -95,7 +97,8 @@ const Dashboard = () => {
     const loadMoreTransactions = () => {
         const nextPage = page + 1;
         setPage(nextPage);
-        fetchDashboardData(false, nextPage);
+        // Ensure searchTerm is passed when loading older pages
+        fetchDashboardData(false, nextPage, searchTerm);
     };
 
     const handleFlagTransaction = async (id, overrideReason = null) => {
@@ -108,7 +111,7 @@ const Dashboard = () => {
                 severity: overrideReason ? 'high' : 'medium'
             }, { withCredentials: true });
 
-            fetchDashboardData(true, 1);
+            fetchDashboardData(true, 1, searchTerm);
         } catch (error) {
             console.error("failed to flag transaction:", error);
             if (error.response?.status === 401) navigate('/login');
@@ -118,14 +121,13 @@ const Dashboard = () => {
     const handleResolveIncident = async (logId) => {
         try {
             await axios.delete(`http://localhost:5000/api/fraud/${logId}/resolve`, { withCredentials: true });
-            fetchDashboardData(true, 1);
+            fetchDashboardData(true, 1, searchTerm);
         } catch (error) {
             console.error("failed to resolve incident:", error);
             if (error.response?.status === 401) {
                 navigate('/login');
             }
             else if (error.response?.status === 403) {
-                // Catch the RBAC block and alert the user
                 window.alert("Access Denied: Only Admin accounts can resolve security incidents.");
             }
         }
@@ -149,7 +151,7 @@ const Dashboard = () => {
             if (isAnomaly && newTx._id) {
                 await handleFlagTransaction(newTx._id, "System Alert: Suspicious high volume transfer");
             } else {
-                fetchDashboardData(true, 1);
+                fetchDashboardData(true, 1, searchTerm);
             }
         } catch (error) {
             console.error("network or validation failed:", error);
@@ -165,10 +167,9 @@ const Dashboard = () => {
         ? ((stats.flaggedTransactions / stats.totalTransactions) * 100).toFixed(2) 
         : 0;
 
+    // 3. Removed client-side searchTerm filtering so it respects the backend response
     const filteredTransactions = (transactions || []).filter(tx => {
-        const matchesSearch = tx.senderAccount.includes(searchTerm) || tx.receiverAccount.includes(searchTerm);
-        const matchesStatus = statusFilter === 'all' || tx.status === statusFilter;
-        return matchesSearch && matchesStatus;
+        return statusFilter === 'all' || tx.status === statusFilter;
     });
 
     const exportToCSV = () => {
@@ -182,7 +183,7 @@ const Dashboard = () => {
 
         filteredTransactions.forEach(tx => {
             const row = [
-                `"${new Date(tx.createdAt).toLocaleString()}"`, // Wrap in quotes to prevent comma splitting
+                `"${new Date(tx.createdAt).toLocaleString()}"`, 
                 `"${tx.senderAccount}"`,
                 `"${tx.receiverAccount}"`,
                 `"${tx.amount}"`,
@@ -389,13 +390,33 @@ const Dashboard = () => {
                         >
                             Export CSV
                         </button>
-                        <input 
-                            type="text"
-                            placeholder="search account ID"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="text-xs border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-2 py-1.5 focus:outline-none focus:border-gray-500 dark:focus:border-gray-400 w-48"
-                        />
+                        
+                        {/* 4. Wrapped Input and New Button to trigger backend search */}
+                        <div className="flex gap-1">
+                            <input 
+                                type="text"
+                                placeholder="search account ID"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        setPage(1);
+                                        fetchDashboardData(false, 1, searchTerm);
+                                    }
+                                }}
+                                className="text-xs border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-2 py-1.5 focus:outline-none focus:border-gray-500 dark:focus:border-gray-400 w-48"
+                            />
+                            <button
+                                onClick={() => {
+                                    setPage(1);
+                                    fetchDashboardData(false, 1, searchTerm);
+                                }}
+                                className="text-xs bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-3 py-1.5 border border-gray-300 dark:border-gray-600 transition-colors"
+                            >
+                                Search DB
+                            </button>
+                        </div>
+                        
                         <select 
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value)}
